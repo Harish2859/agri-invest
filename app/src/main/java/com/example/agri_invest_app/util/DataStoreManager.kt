@@ -28,6 +28,12 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
+    suspend fun updateVerifiedStatus(verified: Boolean) {
+        context.dataStore.edit { pref ->
+            pref[VERIFIED_KEY] = verified
+        }
+    }
+
     val tokenFlow: Flow<String?> = context.dataStore.data.map { it[TOKEN_KEY] }
     val roleFlow: Flow<String?> = context.dataStore.data.map { it[ROLE_KEY] }
     val verifiedFlow: Flow<Boolean> = context.dataStore.data.map { it[VERIFIED_KEY] ?: false }

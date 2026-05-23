@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.example.agri_invest_app.data.model.InvestmentDetail
 import com.example.agri_invest_app.ui.common.ShimmerProjectItem
 import com.example.agri_invest_app.ui.common.shimmerEffect
+import java.math.BigDecimal
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -144,15 +145,12 @@ fun InvestorPortfolioScreen(viewModel: InvestorViewModel) {
 @Composable
 fun PortfolioSummaryShimmer() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Shimmer for PortfolioValueCard
         Card(
             modifier = Modifier.fillMaxWidth().height(180.dp),
             shape = RoundedCornerShape(24.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize().shimmerEffect())
         }
-        
-        // Shimmer for Metric Cards
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Card(
                 modifier = Modifier.weight(1f).height(100.dp),
@@ -171,7 +169,7 @@ fun PortfolioSummaryShimmer() {
 }
 
 @Composable
-fun PortfolioValueCard(balance: Double, totalValue: Double, accentColor: Color) {
+fun PortfolioValueCard(balance: BigDecimal, totalValue: BigDecimal, accentColor: Color) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -304,7 +302,7 @@ fun PortfolioInvestmentItem(investment: InvestmentDetail, accentColor: Color) {
                     
                     Text(text = returnLabel, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                     Text(
-                        text = "₹${String.format(Locale.getDefault(), "%,.0f", returnVal ?: 0.0)}",
+                        text = "₹${String.format(Locale.getDefault(), "%,.0f", returnVal ?: BigDecimal.ZERO)}",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = if (isProfit) Color(0xFF2E7D32) else Color.Unspecified
@@ -312,14 +310,17 @@ fun PortfolioInvestmentItem(investment: InvestmentDetail, accentColor: Color) {
                 }
             }
             
-            if (investment.settled && investment.finalReturn != null) {
-                val roi = ((investment.finalReturn - investment.amountInvested) / investment.amountInvested) * 100
+            if (investment.settled && investment.finalReturn != null && investment.amountInvested > BigDecimal.ZERO) {
+                val roi = investment.finalReturn.subtract(investment.amountInvested)
+                    .divide(investment.amountInvested, 4, java.math.RoundingMode.HALF_UP)
+                    .multiply(BigDecimal("100"))
+                
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "${String.format(Locale.getDefault(), "%.1f", roi)}% Overall ROI",
+                        text = "${String.format(Locale.getDefault(), "%.1f", roi.toDouble())}% Overall ROI",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF2E7D32),
                         fontWeight = FontWeight.Bold

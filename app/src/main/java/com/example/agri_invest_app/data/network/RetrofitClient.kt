@@ -49,6 +49,10 @@ object RetrofitClient {
         retrofit.create(LeadService::class.java)
     }
 
+    val walletService: WalletService by lazy {
+        retrofit.create(WalletService::class.java)
+    }
+
     // Keep instance for backward compatibility if needed, but preferred to use specific services
     val instance: AuthService get() = authService
 }

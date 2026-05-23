@@ -35,6 +35,9 @@ fun LeadDashboardScreen(viewModel: LeadViewModel, onLogout: () -> Unit) {
     val tabs = listOf("KYC Verification", "Project Approval", "Milestone Proofs")
 
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    var userToReject by remember { mutableStateOf<User?>(null) }
+    var rejectionReason by remember { mutableStateOf("") }
 
     // Refresh data when Lead enters screen
     LaunchedEffect(Unit) {
@@ -50,6 +53,44 @@ fun LeadDashboardScreen(viewModel: LeadViewModel, onLogout: () -> Unit) {
     }
 
     var showWithdrawDialog by remember { mutableStateOf(false) }
+
+    if (userToReject != null) {
+        AlertDialog(
+            onDismissRequest = { userToReject = null },
+            title = { Text("Reject Verification") },
+            text = {
+                Column {
+                    Text("Provide a reason for rejecting ${userToReject?.fullName}'s KYC.")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = rejectionReason,
+                        onValueChange = { rejectionReason = it },
+                        label = { Text("Reason") },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("e.g. Blurred document, Invalid ID") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.verifyUser(userToReject!!.id!!, false, rejectionReason)
+                        userToReject = null
+                        rejectionReason = ""
+                    },
+                    enabled = rejectionReason.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Confirm Rejection")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { userToReject = null; rejectionReason = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -109,9 +150,12 @@ fun LeadDashboardScreen(viewModel: LeadViewModel, onLogout: () -> Unit) {
                     }
                 } else {
                     when (selectedTab) {
-                        0 -> PendingUsersList(state.pendingUsers, { viewModel.loadData() }) { userId ->
-                            viewModel.verifyUser(userId)
-                        }
+                        0 -> PendingUsersList(
+                            users = state.pendingUsers, 
+                            onRefresh = { viewModel.loadData() },
+                            onVerify = { viewModel.verifyUser(it, true) },
+                            onReject = { userToReject = it }
+                        )
                         1 -> PendingProjectsList(state.pendingProjects, { viewModel.loadData() }) { projectId ->
                             viewModel.approveProject(projectId)
                         }
@@ -238,7 +282,12 @@ fun WithdrawalDialog(
 }
 
 @Composable
-fun PendingUsersList(users: List<User>, onRefresh: () -> Unit, onVerify: (Long) -> Unit) {
+fun PendingUsersList(
+    users: List<User>, 
+    onRefresh: () -> Unit, 
+    onVerify: (Long) -> Unit,
+    onReject: (User) -> Unit
+) {
     if (users.isEmpty()) {
         EmptyStateView("No KYC verifications require your review right now.", onRefresh)
     } else {
@@ -247,7 +296,7 @@ fun PendingUsersList(users: List<User>, onRefresh: () -> Unit, onVerify: (Long) 
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(users) { user ->
-                UserVerificationCard(user, onVerify)
+                UserVerificationCard(user, onVerify, onReject)
             }
         }
     }
@@ -286,20 +335,29 @@ fun PendingMilestonesList(milestones: List<Milestone>, onRefresh: () -> Unit, on
 }
 
 @Composable
-fun UserVerificationCard(user: User, onVerify: (Long) -> Unit) {
+fun UserVerificationCard(user: User, onVerify: (Long) -> Unit, onReject: (User) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = user.fullName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(text = "Email: ${user.email}", style = MaterialTheme.typography.bodySmall)
+            Text(text = user.fullName ?: "Unknown User", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(text = "Email: ${user.email ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
             Text(text = "Aadhaar: ${user.aadhaarNo ?: "Not Provided"}", style = MaterialTheme.typography.bodySmall)
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            Button(
-                onClick = { user.id?.let { onVerify(it) } },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Approve KYC")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { onReject(user) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Reject")
+                }
+                Button(
+                    onClick = { user.id?.let { onVerify(it) } },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Approve KYC")
+                }
             }
         }
     }
@@ -313,7 +371,7 @@ fun ProjectApprovalCard(project: FarmProject, onApprove: (Long) -> Unit) {
                 Text(text = project.title ?: "Untitled Project", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Badge { Text(project.status ?: "PENDING") }
             }
-            Text(text = "Location: ${project.location}", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Location: ${project.location ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
             Text(text = "Target: ₹${project.targetAmount}", style = MaterialTheme.typography.bodySmall)
             
             Spacer(modifier = Modifier.height(8.dp))

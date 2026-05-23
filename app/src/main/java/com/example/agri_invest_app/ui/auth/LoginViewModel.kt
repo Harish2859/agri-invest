@@ -6,6 +6,7 @@ import com.example.agri_invest_app.data.model.LoginRequest
 import com.example.agri_invest_app.data.network.RetrofitClient
 import com.example.agri_invest_app.data.repository.AuthRepository
 import com.example.agri_invest_app.util.DataStoreManager
+import com.example.agri_invest_app.util.Resource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,17 +27,20 @@ class LoginViewModel(
             
             val result = repository.login(LoginRequest(email, pass))
             
-            result.onSuccess { response ->
-                dataStoreManager.saveAuthData(response.token, response.role, response.verified)
-                RetrofitClient.setToken(response.token)
-                _state.update { it.copy(isLoading = false, isSuccess = true, role = response.role) }
-            }.onFailure { e ->
-                val errorMessage = when {
-                    e.message?.contains("401") == true -> "Invalid email or password."
-                    e.message?.contains("403") == true -> "Account not authorized."
-                    else -> e.message ?: "Login failed. Please check your connection."
+            when (result) {
+                is Resource.Success -> {
+                    val response = result.data
+                    // SAFE NULL HANDLING: Provide defaults for token and role
+                    val token = response.token ?: ""
+                    val role = response.role ?: "INVESTOR"
+                    dataStoreManager.saveAuthData(token, role, response.verified)
+                    RetrofitClient.setToken(token)
+                    _state.update { it.copy(isLoading = false, isSuccess = true, role = role) }
                 }
-                _state.update { it.copy(isLoading = false, error = errorMessage) }
+                is Resource.Error -> {
+                    _state.update { it.copy(isLoading = false, error = result.message) }
+                }
+                is Resource.Loading -> { }
             }
         }
     }

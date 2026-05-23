@@ -29,6 +29,7 @@ import com.example.agri_invest_app.data.model.FarmProject
 import com.example.agri_invest_app.data.model.Milestone
 import com.example.agri_invest_app.data.model.User
 import com.example.agri_invest_app.ui.common.ShimmerProjectItem
+import java.math.BigDecimal
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,6 +38,47 @@ fun LeadDashboard(viewModel: LeadViewModel) {
     val state by viewModel.state.collectAsState()
     val leadAccent = Color(0xFF006064)
     var selectedTab by remember { mutableIntStateOf(0) }
+    
+    var userToReject by remember { mutableStateOf<User?>(null) }
+    var rejectionReason by remember { mutableStateOf("") }
+
+    if (userToReject != null) {
+        AlertDialog(
+            onDismissRequest = { userToReject = null },
+            title = { Text("Reject Verification") },
+            text = {
+                Column {
+                    Text("Provide a reason for rejecting ${userToReject?.fullName}'s KYC.")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = rejectionReason,
+                        onValueChange = { rejectionReason = it },
+                        label = { Text("Reason") },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("e.g. Blurred document, Invalid ID") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.verifyUser(userToReject!!.id!!, false, rejectionReason)
+                        userToReject = null
+                        rejectionReason = ""
+                    },
+                    enabled = rejectionReason.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Confirm Rejection")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { userToReject = null; rejectionReason = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -74,7 +116,7 @@ fun LeadDashboard(viewModel: LeadViewModel) {
             }
 
             // Commission Card
-            LeadCommissionCard(balance = state.walletBalance.toDouble(), accentColor = leadAccent)
+            LeadCommissionCard(balance = state.walletBalance, accentColor = leadAccent)
 
             // Tabs for Pending Items
             ScrollableTabRow(
@@ -111,7 +153,11 @@ fun LeadDashboard(viewModel: LeadViewModel) {
                     ) {
                         when (selectedTab) {
                             0 -> items(state.pendingUsers) { user ->
-                                PendingUserItem(user, onVerify = { viewModel.verifyUser(user.id!!) })
+                                PendingUserItem(
+                                    user = user, 
+                                    onVerify = { viewModel.verifyUser(user.id!!, true) },
+                                    onReject = { userToReject = user }
+                                )
                             }
                             1 -> items(state.pendingProjects) { project ->
                                 PendingProjectItem(project, onApprove = { viewModel.approveProject(project.id) })
@@ -169,7 +215,7 @@ fun LeadMetricCard(label: String, value: String, icon: ImageVector, color: Color
 }
 
 @Composable
-fun LeadCommissionCard(balance: Double, accentColor: Color) {
+fun LeadCommissionCard(balance: BigDecimal, accentColor: Color) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         shape = RoundedCornerShape(24.dp),
@@ -212,7 +258,7 @@ fun LeadCommissionCard(balance: Double, accentColor: Color) {
 }
 
 @Composable
-fun PendingUserItem(user: User, onVerify: () -> Unit) {
+fun PendingUserItem(user: User, onVerify: () -> Unit, onReject: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     
     Card(
@@ -228,8 +274,8 @@ fun PendingUserItem(user: User, onVerify: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(user.fullName, fontWeight = FontWeight.Bold)
-                    Text(user.role, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text(user.fullName ?: "Unknown User", fontWeight = FontWeight.Bold)
+                    Text(user.role ?: "N/A", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 }
                 Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
             }
@@ -252,7 +298,7 @@ fun PendingUserItem(user: User, onVerify: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { /* Future: Reject */ }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onReject, modifier = Modifier.weight(1f)) {
                         Text("Reject", color = Color.Red)
                     }
                     Button(onClick = onVerify, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF006064))) {

@@ -60,22 +60,15 @@ class FarmerViewModel(
             val basicProjects = projectsDeferred.await().getOrDefault(emptyList())
             val transactions = transactionsDeferred.await().getOrDefault(emptyList())
 
-            // 2. Detailed Sync
+            // 2. Sync Detailed Project Info (optional, but keep for consistency)
             val detailedProjects = basicProjects.map { p ->
                 async { projectRepository.getProjectDetails(p.id).getOrDefault(p) }
             }.awaitAll()
 
-            // 3. Totals calculation using BigDecimal
-            val walletFromProjects = detailedProjects.firstNotNullOfOrNull { it.farmer?.walletBalance } ?: BigDecimal.ZERO
-            val withdrawableFromProjects = detailedProjects.fold(BigDecimal.ZERO) { acc, p -> acc.add(p.withdrawableBalance) }
-            
-            val userWallet = user?.walletBalance ?: BigDecimal.ZERO
-            val maxWallet = if (userWallet > walletFromProjects) userWallet else walletFromProjects
-            val finalWithdrawable = maxWallet.add(withdrawableFromProjects)
-            
-            val userReleased = user?.releasedToFarmer ?: BigDecimal.ZERO
-            val projectReleasedTotal = detailedProjects.fold(BigDecimal.ZERO) { acc, p -> acc.add(p.releasedToFarmer) }
-            val finalReleased = if (userReleased > projectReleasedTotal) userReleased else projectReleasedTotal
+            // 3. Reliable Totals: Use User Profile as the single source of truth for the wallet.
+            // FIXED: Removed the erroneous client-side summation that caused balance jumps.
+            val finalWithdrawable = user?.walletBalance ?: BigDecimal.ZERO
+            val finalReleased = user?.releasedToFarmer ?: BigDecimal.ZERO
 
             if (user != null) {
                 dataStoreManager.saveAuthData(dataStoreManager.getToken() ?: "", "FARMER", user.verified)

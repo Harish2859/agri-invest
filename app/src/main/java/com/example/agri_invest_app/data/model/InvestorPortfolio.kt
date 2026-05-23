@@ -1,6 +1,7 @@
 package com.example.agri_invest_app.data.model
 
 import com.google.gson.annotations.SerializedName
+import java.math.BigDecimal
 
 data class InvestorPortfolio(
     val summary: PortfolioSummary?,
@@ -9,14 +10,19 @@ data class InvestorPortfolio(
 )
 
 data class PortfolioSummary(
-    @SerializedName("walletBalance", alternate = ["wallet_balance"])
-    val walletBalance: Double,
-    @SerializedName("totalPortfolioValue", alternate = ["total_portfolio_value"])
-    val totalPortfolioValue: Double,
+    // CHANGED: Using BigDecimal for consistency and precision
+    // CHANGED: Narrowed alternates to avoid mapping "Total Portfolio Value" into "Wallet Balance"
+    @SerializedName("walletBalance", alternate = ["wallet_balance", "available_cash", "cash_balance"])
+    val walletBalance: BigDecimal = BigDecimal.ZERO,
+    
+    @SerializedName("totalPortfolioValue", alternate = ["total_portfolio_value", "net_worth", "total_assets"])
+    val totalPortfolioValue: BigDecimal = BigDecimal.ZERO,
+    
     @SerializedName("impactFarmersHelped", alternate = ["impact_farmers_helped"])
-    val impactFarmersHelped: Int,
+    val impactFarmersHelped: Int = 0,
+    
     @SerializedName("activeInvestmentsCount", alternate = ["active_investments_count"])
-    val activeInvestmentsCount: Int
+    val activeInvestmentsCount: Int = 0
 )
 
 data class RiskProfile(
@@ -31,14 +37,20 @@ data class InvestmentDetail(
     val projectId: Long?,
     @SerializedName("projectTitle", alternate = ["project_title"])
     val projectTitle: String?,
-    @SerializedName("amountInvested", alternate = ["amount_invested"])
-    val amountInvested: Double,
+    
+    // CHANGED: Using BigDecimal
+    @SerializedName("amountInvested", alternate = ["amount_invested", "principal"])
+    val amountInvested: BigDecimal = BigDecimal.ZERO,
+    
     @SerializedName("status")
     val currentStatus: String?,
+    
     @SerializedName("expectedReturn", alternate = ["expected_return"])
-    val expectedReturn: Double? = null,
+    val expectedReturn: BigDecimal? = null,
+    
     @SerializedName("finalReturn", alternate = ["final_return"])
-    val finalReturn: Double? = null,
+    val finalReturn: BigDecimal? = null,
+
     @SerializedName("settled")
     val settled: Boolean = false,
     val crop: String? = null

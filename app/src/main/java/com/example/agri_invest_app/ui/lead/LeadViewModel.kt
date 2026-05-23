@@ -64,12 +64,12 @@ class LeadViewModel(
         }
     }
 
-    fun verifyUser(userId: Long) {
+    fun verifyUser(userId: Long, approve: Boolean, reason: String? = null) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
-            repository.verifyUser(userId).onSuccess {
+            repository.verifyUser(userId, approve, reason).onSuccess {
                 loadData()
-                _message.value = "User verified successfully!"
+                _message.value = if (approve) "User verified successfully!" else "User rejected."
             }.onFailure { e ->
                 _state.update { it.copy(isLoading = false, error = "Verification failed: ${e.message}") }
                 _message.value = "Verification failed: ${e.message}"

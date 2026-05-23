@@ -1,5 +1,8 @@
 package com.example.agri_invest_app.ui.common
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,153 +28,282 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.agri_invest_app.data.model.FarmProject
 import com.example.agri_invest_app.data.model.InvestorPortfolio
+import com.example.agri_invest_app.data.model.KycStatus
 import com.example.agri_invest_app.data.model.User
 import com.example.agri_invest_app.data.network.RetrofitClient
+import com.example.agri_invest_app.ui.investor.AddFundsDialog
+import java.math.BigDecimal
 import java.util.Locale
 
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
-    onNavigateToTransactions: () -> Unit = {}
+    onNavigateToTransactions: () -> Unit = {},
+    onAddFunds: (Double) -> Unit = {},
+    onVerifyKyc: (String) -> Unit = {},
+    externalUser: User? = null,
+    externalIsLoading: Boolean = false,
+    externalError: String? = null,
+    externalSuccessMessage: String? = null,
+    onClearError: () -> Unit = {},
+    onClearSuccess: () -> Unit = {}
 ) {
-    var user by remember { mutableStateOf<User?>(null) }
+    var internalUser by remember { mutableStateOf<User?>(null) }
     var farmerProjects by remember { mutableStateOf<List<FarmProject>>(emptyList()) }
     var investorPortfolio by remember { mutableStateOf<InvestorPortfolio?>(null) }
     var leadMetrics by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     
-    var isLoading by remember { mutableStateOf(true) }
+    var isFetchingInternalData by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
+    
+    var showAddFundsDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(refreshTrigger) {
-        isLoading = true
-        try {
-            val response = RetrofitClient.authService.getProfile()
-            if (response.isSuccessful) {
-                val u = response.body()
-                user = u
-                u?.let {
-                    when (it.role.uppercase()) {
-                        "FARMER" -> {
-                            val pResp = RetrofitClient.farmerService.getMyProjects()
-                            if (pResp.isSuccessful) farmerProjects = pResp.body() ?: emptyList()
-                        }
-                        "INVESTOR" -> {
-                            val portResp = RetrofitClient.projectService.getInvestorPortfolio()
-                            if (portResp.isSuccessful) investorPortfolio = portResp.body()
-                        }
-                        "VILLAGE_LEAD", "LEAD" -> {
-                            val kyc = RetrofitClient.leadService.getPendingUsers()
-                            val projs = RetrofitClient.leadService.getPendingProjects()
-                            val miles = RetrofitClient.leadService.getPendingMilestones()
-                            leadMetrics = mapOf(
-                                "kyc" to (kyc.body()?.size ?: 0),
-                                "projects" to (projs.body()?.size ?: 0),
-                                "milestones" to (miles.body()?.size ?: 0)
-                            )
-                        }
-                    }
+    val user = externalUser ?: internalUser
+    val isLoading = if (externalUser != null) externalIsLoading else isFetchingInternalData
+
+    val kycLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onVerifyKyc(it.toString()) }
+    }
+
+    // Fetch initial profile if not provided externally
+    LaunchedEffect(refreshTrigger, externalUser == null) {
+        if (externalUser == null) {
+            isFetchingInternalData = true
+            try {
+                val response = RetrofitClient.authService.getProfile()
+                if (response.isSuccessful) {
+                    internalUser = response.body()
                 }
+            } catch (e: Exception) {
+                internalUser = null
+            } finally {
+                isFetchingInternalData = false
             }
-        } catch (e: Exception) {
-            user = null
-        } finally {
-            isLoading = false
         }
     }
 
-    if (isLoading) {
-        ProfileShimmer()
-    } else if (user != null) {
-        val roleColor = when (user!!.role.uppercase()) {
-            "FARMER" -> Color(0xFF2E7D32)
-            "INVESTOR" -> Color(0xFF1A237E)
-            "VILLAGE_LEAD", "LEAD" -> Color(0xFF006064)
-            else -> MaterialTheme.colorScheme.primary
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            item {
-                ProfileHeader(user!!, roleColor)
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-
-            item {
-                when (user!!.role.uppercase()) {
-                    "FARMER" -> FarmerContent(user!!, farmerProjects, roleColor)
-                    "INVESTOR" -> InvestorContent(user!!, investorPortfolio, roleColor)
-                    "VILLAGE_LEAD", "LEAD" -> LeadContent(user!!, leadMetrics, roleColor)
+    // Secondary data fetch based on user role
+    LaunchedEffect(user?.id, user?.role) {
+        user?.let { u ->
+            try {
+                val roleStr = u.role ?: ""
+                when (roleStr.uppercase()) {
+                    "FARMER" -> {
+                        val pResp = RetrofitClient.farmerService.getMyProjects()
+                        if (pResp.isSuccessful) farmerProjects = pResp.body() ?: emptyList()
+                    }
+                    "INVESTOR" -> {
+                        val portResp = RetrofitClient.projectService.getInvestorPortfolio()
+                        if (portResp.isSuccessful) investorPortfolio = portResp.body()
+                    }
+                    "VILLAGE_LEAD", "LEAD" -> {
+                        val kyc = RetrofitClient.leadService.getPendingUsers()
+                        val projs = RetrofitClient.leadService.getPendingProjects()
+                        val miles = RetrofitClient.leadService.getPendingMilestones()
+                        leadMetrics = mapOf(
+                            "kyc" to (kyc.body()?.size ?: 0),
+                            "projects" to (projs.body()?.size ?: 0),
+                            "milestones" to (miles.body()?.size ?: 0)
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+            } catch (e: Exception) {
+                // Silently handle secondary fetch errors
             }
+        }
+    }
 
-            item {
-                Text(
-                    "Account Actions",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    fontWeight = FontWeight.Bold
-                )
-                OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+    // Show error snackbar
+    LaunchedEffect(externalError) {
+        externalError?.let {
+            snackbarHostState.showSnackbar(it)
+            onClearError()
+        }
+    }
+
+    // Show success snackbar
+    LaunchedEffect(externalSuccessMessage) {
+        externalSuccessMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onClearSuccess()
+        }
+    }
+
+    if (showAddFundsDialog) {
+        AddFundsDialog(
+            onDismiss = { showAddFundsDialog = false },
+            onConfirmDeposit = { amount ->
+                onAddFunds(amount)
+            }
+        )
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (isLoading && user == null) {
+                ProfileShimmer()
+            } else if (user != null) {
+                val roleStr = user.role ?: "USER"
+                val roleColor = when (roleStr.uppercase()) {
+                    "FARMER" -> Color(0xFF2E7D32)
+                    "INVESTOR" -> Color(0xFF1A237E)
+                    "VILLAGE_LEAD", "LEAD" -> Color(0xFF006064)
+                    else -> MaterialTheme.colorScheme.primary
+                }
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column {
-                        ProfileOptionItem(
-                            title = "Transaction History",
-                            subtitle = "View all your deposits and withdrawals",
-                            icon = Icons.Default.History,
-                            onClick = onNavigateToTransactions
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
-                        ProfileOptionItem(
-                            title = "App Settings",
-                            subtitle = "Notifications, security, and preferences",
-                            icon = Icons.Default.Settings,
-                            onClick = { /* Future: Settings */ }
-                        )
-                        if (user!!.role.uppercase() == "VILLAGE_LEAD" || user!!.role.uppercase() == "LEAD") {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
-                            ProfileOptionItem(
-                                title = "Export Transaction Data",
-                                subtitle = "Download CSV for local records",
-                                icon = Icons.Default.FileDownload,
-                                onClick = { /* Future: CSV Export */ }
+                    item {
+                        ProfileHeader(user, roleColor)
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    if (roleStr.uppercase() == "INVESTOR") {
+                        item {
+                            ProfileWalletCard(
+                                balance = user.walletBalance ?: BigDecimal.ZERO,
+                                accentColor = roleColor,
+                                onAddFunds = { showAddFundsDialog = true }
                             )
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    }
+
+                    item {
+                        // FIX: Use effectiveKycStatus to auto-approve Investors even with stale DB state
+                        val status = user.effectiveKycStatus
+                        KycStatusBanner(
+                            kycStatus = status,
+                            rejectionReason = user.kycRejectionReason,
+                            onNavigateToUpload = { kycLauncher.launch("*/*") }
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    item {
+                        when (roleStr.uppercase()) {
+                            "FARMER" -> FarmerContent(user, farmerProjects, roleColor)
+                            "INVESTOR" -> InvestorContent(user, investorPortfolio, roleColor)
+                            "VILLAGE_LEAD", "LEAD" -> LeadContent(user, leadMetrics, roleColor)
+                            else -> {}
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    item {
+                        Text(
+                            "Account Actions",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column {
+                                ProfileOptionItem(
+                                    title = "Transaction History",
+                                    subtitle = "View all your deposits and withdrawals",
+                                    icon = Icons.Default.History,
+                                    onClick = onNavigateToTransactions
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+                                ProfileOptionItem(
+                                    title = "App Settings",
+                                    subtitle = "Notifications, security, and preferences",
+                                    icon = Icons.Default.Settings,
+                                    onClick = { /* Future: Settings */ }
+                                )
+                                if (roleStr.uppercase().contains("LEAD")) {
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+                                    ProfileOptionItem(
+                                        title = "Export Transaction Data",
+                                        subtitle = "Download CSV for local records",
+                                        icon = Icons.Default.FileDownload,
+                                        onClick = { /* Future: CSV Export */ }
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
+
+                    item {
+                        Button(
+                            onClick = onLogout,
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Logout", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-
-            item {
-                Button(
-                    onClick = onLogout,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Logout", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    } else {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.ErrorOutline, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Failed to load profile.", color = Color.Gray)
-                Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { refreshTrigger++ }) { Text("Retry") }
-                    Button(onClick = onLogout, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                        Text("Logout")
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Failed to load profile.", color = Color.Gray)
+                        Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedButton(onClick = { refreshTrigger++ }) { Text("Retry") }
+                            Button(onClick = onLogout, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                                Text("Logout")
+                            }
+                        }
                     }
                 }
+            }
+            
+            if (isLoading && user != null) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileWalletCard(balance: BigDecimal, accentColor: Color, onAddFunds: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = accentColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Wallet, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Apps Wallet Balance", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "₹${String.format(Locale.getDefault(), "%,.2f", balance.toDouble())}",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onAddFunds,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = accentColor)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add Funds to Wallet", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -187,7 +319,8 @@ fun ProfileHeader(user: User, roleColor: Color) {
                 modifier = Modifier.size(100.dp),
                 tint = roleColor
             )
-            if (user.verified) {
+            // Use isEffectivelyVerified to show the checkmark for legacy investors
+            if (user.isEffectivelyVerified) {
                 Surface(
                     color = Color(0xFF4CAF50),
                     shape = CircleShape,
@@ -205,8 +338,8 @@ fun ProfileHeader(user: User, roleColor: Color) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(user.fullName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text(user.email, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+        Text(user.fullName ?: "User", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(user.email ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -222,7 +355,7 @@ fun ProfileHeader(user: User, roleColor: Color) {
                 Box(modifier = Modifier.size(8.dp).background(roleColor, CircleShape))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = user.role.uppercase(),
+                    text = (user.role ?: "USER").uppercase(),
                     style = MaterialTheme.typography.labelLarge,
                     color = roleColor,
                     fontWeight = FontWeight.Bold
@@ -251,32 +384,18 @@ fun MetricCard(label: String, value: String, icon: ImageVector, color: Color) {
 @Composable
 fun FarmerContent(user: User, projects: List<FarmProject>, accentColor: Color) {
     Column {
-        if (user.verified) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                color = Color(0xFFE8F5E9),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = Color(0xFF2E7D32))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Verified Vendor • KYC Approved", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32))
-                }
-            }
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val activeCount = projects.count { it.status == "ACTIVE" || it.status == "FUNDED" || it.status == "FUNDING" }
-            val lifetimeEarnings = projects.sumOf { it.releasedToFarmer.toDouble() }
+            val lifetimeEarnings = projects.sumOf { (it.releasedToFarmer ?: BigDecimal.ZERO).toDouble() }
             
             Box(modifier = Modifier.weight(1f)) {
                 MetricCard("Active Projects", activeCount.toString(), Icons.Default.Agriculture, accentColor)
             }
             Box(modifier = Modifier.weight(1f)) {
-                MetricCard("Earnings", "₹${String.format(Locale.getDefault(), "%.0f", lifetimeEarnings)}", Icons.Default.Payments, accentColor)
+                MetricCard("Earnings", "₹${String.format(Locale.getDefault(), "%,.0f", lifetimeEarnings)}", Icons.Default.Payments, accentColor)
             }
             Box(modifier = Modifier.weight(1f)) {
                 MetricCard("Projects", projects.size.toString(), Icons.AutoMirrored.Filled.FactCheck, accentColor)
@@ -298,16 +417,16 @@ fun FarmerContent(user: User, projects: List<FarmProject>, accentColor: Color) {
 fun InvestorContent(user: User, portfolio: InvestorPortfolio?, accentColor: Color) {
     Column {
         GlassCard(accentColor = accentColor) {
-            Text("Portfolio Worth", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Portfolio Snapshot", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Wallet Cash", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    Text("₹${portfolio?.summary?.walletBalance ?: 0.0}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Total Invested", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text("₹${portfolio?.summary?.totalPortfolioValue ?: 0.0}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("Invested Capital", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    Text("₹${portfolio?.summary?.totalPortfolioValue ?: 0.0}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Impact", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text("${portfolio?.summary?.impactFarmersHelped ?: 0} Farmers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -317,11 +436,6 @@ fun InvestorContent(user: User, portfolio: InvestorPortfolio?, accentColor: Colo
                 color = accentColor,
                 trackColor = accentColor.copy(alpha = 0.1f)
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Total ROI", style = MaterialTheme.typography.labelSmall)
-                Text("+12.5%", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
-            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -335,8 +449,8 @@ fun InvestorContent(user: User, portfolio: InvestorPortfolio?, accentColor: Colo
              }
              Box(modifier = Modifier.weight(1f)) {
                  GlassCard(accentColor = accentColor) {
-                     Text("Impact", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                     Text("${portfolio?.summary?.impactFarmersHelped ?: 0} Farmers", fontWeight = FontWeight.Bold, color = accentColor)
+                     Text("Total ROI", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                     Text("+12.5%", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
                  }
              }
         }
@@ -352,7 +466,7 @@ fun LeadContent(user: User, metrics: Map<String, Int>, accentColor: Color) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text("Governance Console", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text("Regional Supervisor - Zone 4", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text("Regional Supervisor", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 }
             }
         }
@@ -369,7 +483,7 @@ fun LeadContent(user: User, metrics: Map<String, Int>, accentColor: Color) {
         Spacer(modifier = Modifier.height(16.dp))
         
         GlassCard(accentColor = accentColor) {
-            DetailRow("Total Commission", "₹${user.walletBalance}", Icons.Default.AccountBalanceWallet)
+            DetailRow("Total Commission", "₹${user.walletBalance ?: BigDecimal.ZERO}", Icons.Default.AccountBalanceWallet)
         }
     }
 }

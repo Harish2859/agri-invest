@@ -29,7 +29,8 @@ interface LeadService {
     @POST("/api/admin/verify-user/{id}")
     suspend fun verifyUser(
         @Path("id") userId: Long,
-        @Query("approve") isApproved: Boolean = true
+        @Query("approve") isApproved: Boolean,
+        @Query("reason") reason: String? = null
     ): Response<User>
 
     @POST("/api/admin/approve-project/{id}")

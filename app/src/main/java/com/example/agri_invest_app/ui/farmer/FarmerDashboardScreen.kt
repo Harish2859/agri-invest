@@ -1,5 +1,8 @@
 package com.example.agri_invest_app.ui.farmer
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +21,7 @@ import com.example.agri_invest_app.data.model.FarmProject
 import com.example.agri_invest_app.ui.common.ShimmerProjectItem
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +36,13 @@ fun FarmerDashboardScreen(
     var selectedProjectForWithdraw by remember { mutableStateOf<FarmProject?>(null) }
     var projectToSettle by remember { mutableStateOf<FarmProject?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // KYC File Picker
+    val kycLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.submitKyc(it.toString()) }
+    }
 
     // Feedback Handler
     LaunchedEffect(state.error, state.successMessage) {
@@ -109,7 +120,7 @@ fun FarmerDashboardScreen(
         ) {
             // 1. Verification Status
             if (!state.isVerified && !state.isLoading) {
-                VerificationRequiredCard(onVerifyClick = { viewModel.submitKyc("dummy_land_record_url") })
+                VerificationRequiredCard(onVerifyClick = { kycLauncher.launch("*/*") })
             }
 
             // 2. The Wallet (Aggregated Balance)
@@ -127,7 +138,7 @@ fun FarmerDashboardScreen(
                             Text("Total Withdrawable Balance", style = MaterialTheme.typography.labelMedium)
                             val balanceGreaterThanZero = state.withdrawableBalance.compareTo(BigDecimal.ZERO) > 0
                             Text(
-                                text = "₹${state.withdrawableBalance}",
+                                text = "₹${String.format(Locale.getDefault(), "%,.2f", state.withdrawableBalance)}",
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (balanceGreaterThanZero) Color(0xFF2E7D32) else Color.Unspecified
@@ -158,7 +169,7 @@ fun FarmerDashboardScreen(
                     ) {
                         Column {
                             Text("Total Lifetime Released:", style = MaterialTheme.typography.bodySmall)
-                            Text("₹${state.releasedToFarmer}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                            Text("₹${String.format(Locale.getDefault(), "%,.2f", state.releasedToFarmer)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
                         TextButton(onClick = onNavigateToTransactions) {
                             Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -259,16 +270,16 @@ fun SettlementDialog(
                             
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Lead Commission (5%):", style = MaterialTheme.typography.bodySmall)
-                                Text("-₹$systemFee", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                Text("-₹${String.format(Locale.getDefault(), "%,.2f", systemFee)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Investor Pool (${project.equityOffered}%):", style = MaterialTheme.typography.bodySmall)
-                                Text("-₹$investorShare", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                Text("-₹${String.format(Locale.getDefault(), "%,.2f", investorShare)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Your Net Profit:", fontWeight = FontWeight.Bold)
-                                Text("₹$farmerTakeHome", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
+                                Text("₹${String.format(Locale.getDefault(), "%,.2f", farmerTakeHome)}", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -309,7 +320,7 @@ fun WithdrawDialog(
         title = { Text("Withdraw: $projectTitle") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Available Balance: ₹$balance", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("Available Balance: ₹${String.format(Locale.getDefault(), "%,.2f", balance)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 
                 OutlinedTextField(
                     value = amountText,
@@ -317,7 +328,7 @@ fun WithdrawDialog(
                         if (input.all { it.isDigit() || it == '.' }) amountText = input 
                     },
                     label = { Text("Amount to Payout") },
-                    placeholder = { Text("Max ₹$balance") },
+                    placeholder = { Text("Max ₹${String.format(Locale.getDefault(), "%.0f", balance)}") },
                     modifier = Modifier.fillMaxWidth(),
                     isError = amountText.isNotEmpty() && !isAmountValid
                 )
@@ -376,7 +387,7 @@ fun FarmerProjectItem(project: FarmProject, onClick: () -> Unit, onWithdraw: () 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("Final Net Profit", style = MaterialTheme.typography.labelSmall)
-                        Text("₹${project.finalFarmerProfit}", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.titleMedium)
+                        Text("₹${String.format(Locale.getDefault(), "%,.2f", project.finalFarmerProfit)}", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.titleMedium)
                     }
                     Icon(Icons.Default.CheckCircle, contentDescription = "Settled", tint = Color(0xFF2E7D32))
                 }
@@ -384,7 +395,7 @@ fun FarmerProjectItem(project: FarmProject, onClick: () -> Unit, onWithdraw: () 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                     Column {
                         Text("Project Balance", style = MaterialTheme.typography.labelSmall)
-                        Text("₹${project.withdrawableBalance}", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.titleMedium)
+                        Text("₹${String.format(Locale.getDefault(), "%,.2f", project.withdrawableBalance)}", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), style = MaterialTheme.typography.titleMedium)
                     }
                     
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -420,7 +431,7 @@ fun FarmerProjectItem(project: FarmProject, onClick: () -> Unit, onWithdraw: () 
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(if (isClosed) "Settlement Date:" else "Total Released:", style = MaterialTheme.typography.labelSmall)
-                Text(if (isClosed) "Completed" else "₹${project.releasedToFarmer}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(if (isClosed) "Completed" else "₹${String.format(Locale.getDefault(), "%,.2f", project.releasedToFarmer)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
     }

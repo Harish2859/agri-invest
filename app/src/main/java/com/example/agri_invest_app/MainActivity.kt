@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
         val investmentRepository = InvestmentRepository(RetrofitClient.investmentService)
         val farmerRepository = FarmerRepository(RetrofitClient.farmerService)
         val leadRepository = LeadRepository(RetrofitClient.leadService)
+        val walletRepository = WalletRepository(RetrofitClient.walletService)
         
         enableEdgeToEdge()
         setContent {
@@ -202,9 +203,13 @@ class MainActivity : ComponentActivity() {
                                     FarmerDashboardScreen(viewModel = farmerViewModelInstance!!, onLogout = { loginViewModel.resetState(); forceLogout() }, onCreateProject = { navController.navigate("create_project") }, onProjectClick = { navController.navigate("milestones/$it") })
                                 }
                                 composable("farmer_profile") {
+                                    if (farmerViewModelInstance == null) {
+                                        farmerViewModelInstance = FarmerViewModel(farmerRepository, projectRepository, dataStoreManager)
+                                    }
                                     ProfileScreen(
                                         onLogout = { loginViewModel.resetState(); forceLogout() },
-                                        onNavigateToTransactions = { navController.navigate("transaction_history") }
+                                        onNavigateToTransactions = { navController.navigate("transaction_history") },
+                                        onVerifyKyc = { farmerViewModelInstance?.submitKyc(it) }
                                     )
                                 }
                                 composable("create_project") {
@@ -223,18 +228,38 @@ class MainActivity : ComponentActivity() {
                             navigation(startDestination = "investor_dashboard", route = "investor_root") {
                                 composable("investor_dashboard") {
                                     if (investorViewModelInstance == null) {
-                                        investorViewModelInstance = InvestorViewModel(projectRepository, investmentRepository)
+                                        investorViewModelInstance = InvestorViewModel(authRepository, projectRepository, investmentRepository, walletRepository, dataStoreManager)
                                     }
                                     InvestorDashboard(viewModel = investorViewModelInstance!!, onProjectClick = { navController.navigate("project_details/$it") })
                                 }
                                 composable("investor_portfolio") {
+                                    if (investorViewModelInstance == null) {
+                                        investorViewModelInstance = InvestorViewModel(authRepository, projectRepository, investmentRepository, walletRepository, dataStoreManager)
+                                    }
                                     InvestorPortfolioScreen(viewModel = investorViewModelInstance!!)
                                 }
                                 composable("investor_profile") {
-                                    ProfileScreen(onLogout = { loginViewModel.resetState(); forceLogout() })
+                                    if (investorViewModelInstance == null) {
+                                        investorViewModelInstance = InvestorViewModel(authRepository, projectRepository, investmentRepository, walletRepository, dataStoreManager)
+                                    }
+                                    val investorState by investorViewModelInstance!!.state.collectAsState()
+                                    ProfileScreen(
+                                        onLogout = { loginViewModel.resetState(); forceLogout() },
+                                        onAddFunds = { investorViewModelInstance?.depositFunds(it) },
+                                        onVerifyKyc = { investorViewModelInstance?.submitInvestorKyc(it) },
+                                        externalUser = investorState.user,
+                                        externalIsLoading = investorState.isLoading,
+                                        externalError = investorState.error,
+                                        externalSuccessMessage = investorState.successMessage,
+                                        onClearError = { investorViewModelInstance?.clearError() },
+                                        onClearSuccess = { investorViewModelInstance?.clearSuccessMessage() }
+                                    )
                                 }
                                 composable("project_details/{projectId}", arguments = listOf(navArgument("projectId") { type = NavType.LongType })) { backStackEntry ->
                                     val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+                                    if (investorViewModelInstance == null) {
+                                        investorViewModelInstance = InvestorViewModel(authRepository, projectRepository, investmentRepository, walletRepository, dataStoreManager)
+                                    }
                                     ProjectDetailScreen(projectId = projectId, viewModel = investorViewModelInstance!!, onBack = { navController.popBackStack() })
                                 }
                             }

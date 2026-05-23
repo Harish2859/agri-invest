@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agri_invest_app.data.model.SignupRequest
 import com.example.agri_invest_app.data.repository.AuthRepository
+import com.example.agri_invest_app.util.Resource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,10 +21,15 @@ class SignupViewModel(private val repository: AuthRepository) : ViewModel() {
             _state.update { it.copy(isLoading = true, error = null) }
             val request = SignupRequest(fullName, email, pass, role, aadhaar)
             val result = repository.signup(request)
-            result.onSuccess { user ->
-                _state.update { it.copy(isLoading = false, successUser = user) }
-            }.onFailure { e ->
-                _state.update { it.copy(isLoading = false, error = e.message) }
+            
+            when (result) {
+                is Resource.Success -> {
+                    _state.update { it.copy(isLoading = false, successUser = result.data) }
+                }
+                is Resource.Error -> {
+                    _state.update { it.copy(isLoading = false, error = result.message) }
+                }
+                is Resource.Loading -> { }
             }
         }
     }

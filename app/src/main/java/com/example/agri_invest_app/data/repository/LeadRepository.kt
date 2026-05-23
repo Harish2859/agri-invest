@@ -63,9 +63,9 @@ class LeadRepository(private val api: LeadService) {
         }
     }
 
-    suspend fun verifyUser(userId: Long): Result<User> {
+    suspend fun verifyUser(userId: Long, approve: Boolean, reason: String? = null): Result<User> {
         return try {
-            val response = api.verifyUser(userId, true)
+            val response = api.verifyUser(userId, approve, reason)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

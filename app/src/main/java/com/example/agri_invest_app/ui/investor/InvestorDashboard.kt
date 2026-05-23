@@ -1,5 +1,8 @@
 package com.example.agri_invest_app.ui.investor
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,9 +16,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,7 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.agri_invest_app.data.model.KycStatus
 import com.example.agri_invest_app.data.model.ProjectDiscovery
+import com.example.agri_invest_app.ui.common.KycStatusBanner
 import com.example.agri_invest_app.ui.common.ShimmerProjectItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,8 +38,30 @@ fun InvestorDashboard(
 ) {
     val state by viewModel.state.collectAsState()
     val investorAccent = Color(0xFF1A237E)
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // KYC Photo Picker for immediate approval
+    val kycLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.submitInvestorKyc(it.toString())
+        }
+    }
+
+    LaunchedEffect(state.error, state.successMessage) {
+        state.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+        state.successMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSuccessMessage()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             LargeTopAppBar(
                 title = { 
@@ -60,13 +85,13 @@ fun InvestorDashboard(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (state.isLoading) {
+            if (state.isLoading && state.projects.isEmpty()) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(5) {
                         ShimmerProjectItem()
                     }
                 }
-            } else if (state.error != null) {
+            } else if (state.error != null && state.projects.isEmpty()) {
                 Column(
                     modifier = Modifier.align(Alignment.Center).padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -83,12 +108,30 @@ fun InvestorDashboard(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    item {
+                        state.user?.let { user ->
+                            // Use effectiveKycStatus to handle legacy "Submitted" Investors
+                            val status = user.effectiveKycStatus
+                            if (status != KycStatus.APPROVED) {
+                                KycStatusBanner(
+                                    kycStatus = status,
+                                    rejectionReason = user.kycRejectionReason,
+                                    onNavigateToUpload = { kycLauncher.launch("*/*") }
+                                )
+                            }
+                        }
+                    }
+
                     items(state.projects) { project ->
                         ProjectItem(project = project, accentColor = investorAccent) {
                             onProjectClick(project.projectId)
                         }
                     }
                 }
+            }
+            
+            if (state.isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
     }

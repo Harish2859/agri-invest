@@ -1,6 +1,6 @@
 package com.example.agri_invest_app.data.network
 
-import com.example.agri_invest_app.data.model.CompletionPayload
+import com.example.agri_invest_app.data.model.CompletionRequest
 import com.example.agri_invest_app.data.model.Investment
 import com.example.agri_invest_app.data.model.InvestmentDetail
 import com.example.agri_invest_app.data.model.InvestmentRequest
@@ -18,7 +18,7 @@ interface InvestmentService {
     @POST("/api/investments/complete/{id}")
     suspend fun completeInvestment(
         @Path("id") investmentId: Long,
-        @Body payload: CompletionPayload
+        @Body payload: CompletionRequest
     ): Response<Investment>
 
     @GET("/api/investments/my-history")

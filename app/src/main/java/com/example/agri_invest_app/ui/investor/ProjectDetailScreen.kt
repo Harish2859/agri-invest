@@ -28,6 +28,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.agri_invest_app.data.model.KycStatus
+import com.example.agri_invest_app.data.model.User
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
@@ -46,6 +48,7 @@ fun ProjectDetailScreen(
 
     LaunchedEffect(projectId) {
         viewModel.getProjectDetails(projectId)
+        viewModel.fetchUserProfile() // Ensure we have latest balance/KYC
     }
 
     Scaffold(
@@ -259,6 +262,7 @@ fun ProjectDetailScreen(
                             dragHandle = { BottomSheetDefaults.DragHandle() }
                         ) {
                             InvestmentBottomSheetContent(
+                                user = state.user,
                                 minAmount = project.minInvestmentAmount ?: BigDecimal.ZERO,
                                 targetAmount = project.targetAmount,
                                 accentColor = accentColor,
@@ -296,6 +300,7 @@ fun HighlightCard(label: String, value: String, icon: ImageVector, accentColor: 
 
 @Composable
 fun InvestmentBottomSheetContent(
+    user: User?,
     minAmount: BigDecimal,
     targetAmount: BigDecimal,
     accentColor: Color,
@@ -303,7 +308,14 @@ fun InvestmentBottomSheetContent(
 ) {
     var amountText by remember { mutableStateOf("") }
     val amount = amountText.toBigDecimalOrNull() ?: BigDecimal.ZERO
-    val isValid = amount >= minAmount
+    
+    val isMinAmountMet = amount >= minAmount
+    val hasSufficientFunds = user != null && (user.walletBalance ?: BigDecimal.ZERO) >= amount
+    // FIX: Use effectiveKycStatus to unlock investment for legacy Investors
+    val isKycApproved = user?.effectiveKycStatus == KycStatus.APPROVED
+    
+    val isEligibleToInvest = isMinAmountMet && hasSufficientFunds && isKycApproved
+    
     val ownership = if (targetAmount.compareTo(BigDecimal.ZERO) > 0) {
         amount.multiply(BigDecimal("100")).divide(targetAmount, 4, RoundingMode.HALF_UP).toDouble()
     } else 0.0
@@ -328,25 +340,34 @@ fun InvestmentBottomSheetContent(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            isError = amountText.isNotEmpty() && !isValid,
+            isError = amountText.isNotEmpty() && (!isMinAmountMet || !hasSufficientFunds),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = accentColor,
                 focusedLabelColor = accentColor
             )
         )
 
-        if (amountText.isNotEmpty() && !isValid) {
-            Text(
-                text = "Minimum investment required is ₹${minAmount.toInt()}",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-            )
+        if (amountText.isNotEmpty()) {
+            if (!isMinAmountMet) {
+                Text(
+                    text = "Minimum investment required is ₹${minAmount.toInt()}",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                )
+            } else if (!hasSufficientFunds) {
+                Text(
+                    text = "Insufficient wallet balance (Available: ₹${user?.walletBalance ?: 0})",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (isValid && amount > BigDecimal.ZERO) {
+        if (isEligibleToInvest && amount > BigDecimal.ZERO) {
             Surface(
                 color = accentColor.copy(alpha = 0.05f),
                 shape = RoundedCornerShape(12.dp),
@@ -376,11 +397,22 @@ fun InvestmentBottomSheetContent(
         Button(
             onClick = { onConfirm(amount) },
             modifier = Modifier.fillMaxWidth().height(56.dp),
-            enabled = isValid && amount > BigDecimal.ZERO,
+            enabled = isEligibleToInvest && amount > BigDecimal.ZERO,
             shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isEligibleToInvest) accentColor else Color.Gray
+            )
         ) {
-            Text("Proceed to Secure Payment", fontWeight = FontWeight.Bold)
+            Text(
+                text = when {
+                    !isKycApproved -> "KYC Approval Required"
+                    amountText.isEmpty() -> "Enter Amount"
+                    !isMinAmountMet -> "Below Minimum"
+                    !hasSufficientFunds -> "Insufficient Balance"
+                    else -> "Deploy Capital"
+                },
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
