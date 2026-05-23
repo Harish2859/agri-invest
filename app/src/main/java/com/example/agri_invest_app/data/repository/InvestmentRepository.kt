@@ -1,5 +1,6 @@
 package com.example.agri_invest_app.data.repository
 
+import com.example.agri_invest_app.data.model.CompletionPayload
 import com.example.agri_invest_app.data.model.Investment
 import com.example.agri_invest_app.data.model.InvestmentDetail
 import com.example.agri_invest_app.data.model.InvestmentRequest
@@ -20,9 +21,10 @@ class InvestmentRepository(private val api: InvestmentService) {
         }
     }
 
-    suspend fun completeInvestment(investmentId: Long, txnId: String): Result<Investment> {
+    suspend fun completeInvestment(investmentId: Long, idempotencyKey: String): Result<Investment> {
         return try {
-            val response = api.completeInvestment(investmentId, txnId)
+            val payload = CompletionPayload(idempotency_key = idempotencyKey)
+            val response = api.completeInvestment(investmentId, payload)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

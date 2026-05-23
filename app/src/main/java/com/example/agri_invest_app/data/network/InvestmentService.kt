@@ -1,5 +1,6 @@
 package com.example.agri_invest_app.data.network
 
+import com.example.agri_invest_app.data.model.CompletionPayload
 import com.example.agri_invest_app.data.model.Investment
 import com.example.agri_invest_app.data.model.InvestmentDetail
 import com.example.agri_invest_app.data.model.InvestmentRequest
@@ -9,7 +10,6 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
-import retrofit2.http.Query
 
 interface InvestmentService {
     @POST("/api/investments/pay")
@@ -18,7 +18,7 @@ interface InvestmentService {
     @POST("/api/investments/complete/{id}")
     suspend fun completeInvestment(
         @Path("id") investmentId: Long,
-        @Query("txnId") txnId: String
+        @Body payload: CompletionPayload
     ): Response<Investment>
 
     @GET("/api/investments/my-history")
