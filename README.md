@@ -1,49 +1,51 @@
 # AgriInvest - Connecting Farmers and Investors
 
-AgriInvest is a comprehensive mobile application built to bridge the gap between farmers seeking capital and investors looking for impactful agricultural opportunities. The platform ensures transparency through a governance layer and milestone-based fund releases.
+AgriInvest is a transaction-hardened, multi-role fintech platform built to bridge the gap between farmers seeking capital and investors looking for impactful agricultural opportunities. The platform ensures transparency through a governance layer, high-precision financial tracking, and milestone-based fund releases.
 
-## 🚀 Features
+## 🚀 Key Achievements & Features
+
+### 🛡️ Hardened Security & Governance
+- **Multi-Role RBAC:** Backend-enforced `@PreAuthorize` filters and frontend UI conditional rendering for **Investors**, **Farmers**, and **Village Leads**.
+- **JWT Authentication:** Secure token-based session management with a dedicated `JwtInterceptor`.
+- **4-Stage KYC Engine:** Robust anti-money laundering state machine (`PENDING`, `SUBMITTED`, `APPROVED`, `REJECTED`) with supervisor rejection tracking.
+- **Village Lead Terminal:** Centralized dashboard for supervisors to verify identity documents, vet projects, and approve milestone proofs.
+
+### 💰 High-Precision Financials
+- **BigDecimal Engine:** 100% migration from unsafe floating-point wrappers to high-precision `BigDecimal` for all currency tracking.
+- **Idempotency Safeguards:** Integrated `idempotency_key` verification on critical financial endpoints to prevent duplicate charges or double-spend errors.
+- **Automated Settlement:** Closed-loop profit distribution that automatically splits revenue between Farmers, Investors, and Lead commissions.
+- **Immutable Ledger:** Unified transaction history tracking every `DEPOSIT`, `INVESTMENT`, and `WITHDRAWAL` with unique reference IDs.
+- **Data Export:** Native CSV export utility for localized bookkeeping and regulatory compliance.
 
 ### 👨‍🌾 For Farmers
-- **Project Creation:** Easily list agricultural projects with funding goals and locations.
-- **Milestone Management:** Update progress and upload proof of work to trigger fund releases.
-- **Dashboard:** Track funding status and transaction history.
+- **Project Lifecycle:** List agricultural projects, track funding, and manage harvest milestones.
+- **Wallet & Payouts:** Real-time withdrawal logic to bank simulations for verified profit extraction.
 
 ### 💰 For Investors
-- **Project Discovery:** Browse through various agricultural investment opportunities.
-- **Detailed Insights:** View project details, risks, and expected returns.
-- **Investment Tracking:** Monitor the progress of funded projects.
-
-### 🛡️ For Governance (Lead/Regional Supervisors)
-- **KYC Verification:** Approve or reject user registrations based on identity documents.
-- **Project Vetting:** Field-verify and approve projects before they go live.
-- **Milestone Approval:** Verify proof of work and release funds to farmers.
-- **Commission Tracking:** Manage regional governance earnings.
+- **Project Discovery:** Browse verified agricultural opportunities with detailed risk and ROI profiles.
+- **Impact Tracking:** Monitor portfolio growth and the number of farmers supported.
 
 ## 🛠 Tech Stack
-- **UI:** Jetpack Compose (Material 3)
-- **Language:** Kotlin
-- **Architecture:** MVVM (Model-View-ViewModel)
-- **Networking:** Retrofit & OkHttp
-- **Image Loading:** Coil
-- **Local Storage:** DataStore (for authentication and preferences)
-- **Concurrency:** Kotlin Coroutines & Flow
+- **Frontend:** Jetpack Compose (Material 3), MVVM, Retrofit, Coroutines/Flow, Coil, DataStore.
+- **Backend (API):** Spring Boot, Spring Security (JWT), Hibernate, PostgreSQL.
+- **Precision:** `BigDecimal` for all financial logic.
+- **Observability:** Spring Boot Actuator, Micrometer.
 
 ## 📂 Project Structure
 ```text
 com.example.agri_invest_app
 ├── data
-│   ├── model       # Data classes (User, Project, Milestone, etc.)
-│   ├── network     # Retrofit services and API definitions
-│   └── repository  # Data handling logic
+│   ├── model       # Data classes with BigDecimal precision
+│   ├── network     # Retrofit services & JWT Interceptors
+│   └── repository  # Repository pattern with Resource wrapper
 ├── ui
-│   ├── auth        # Login and Registration screens
-│   ├── farmer      # Farmer-specific dashboards and forms
-│   ├── investor    # Project browsing and investment UI
-│   ├── lead        # Governance and approval dashboards
-│   ├── common      # Reusable UI components
-│   └── theme       # Design system (Color, Type, Shape)
-└── util            # Constants, Interceptors, and Helper functions
+│   ├── auth        # Secure Login & 4-stage KYC registration
+│   ├── farmer      # Farmer dashboard, Project creation, Payouts
+│   ├── investor    # Project browsing & Wallet management
+│   ├── lead        # Governance terminal & Queue management
+│   ├── history     # Immutable Transaction Ledger & CSV Export
+│   └── common      # Reusable Shimmer effects and UI components
+└── util            # Constants, Interceptors, and File Export helpers
 ```
 
 ## ⚙️ Getting Started
@@ -52,9 +54,9 @@ com.example.agri_invest_app
    ```bash
    git clone https://github.com/yourusername/agri-invest-app.git
    ```
-2. **Setup API:** Ensure the backend API endpoint is correctly configured in `Constants.kt`.
-3. **Build:** Open the project in Android Studio and sync Gradle.
-4. **Run:** Deploy to an emulator or physical device (API 24+ recommended).
+2. **Setup Backend:** Ensure the Spring Boot service is running and configured with PostgreSQL.
+3. **Environment Variables:** Set up `JWT_SECRET_KEY` and DB credentials.
+4. **Android Build:** Open in Android Studio, sync Gradle, and deploy to API 24+ device.
 
 ## 📄 License
 This project is licensed under the MIT License.
